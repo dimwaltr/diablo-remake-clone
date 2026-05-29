@@ -1,0 +1,17 @@
+{
+	"sword01": {
+		"name": "Kard",
+		"image": "res://items/sword01.png",
+		"size": "Vector2i(1, 3)"
+	},
+	"sword02": {
+		"name": "Kard2",
+		"image": "res://items/sword02.png",
+		"size": "Vector2i(2, 3)"
+	},
+	"gold_coin": {
+		"name": "Arany",
+		"image": "res://objects/arany_ikon.png",
+		"size": "Vector2i(1, 1)"
+	}
+}
