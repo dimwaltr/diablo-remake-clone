@@ -174,8 +174,19 @@ func update_stat_ui() -> void:
 	# 2. A felugró Label-ek szövegének aktualizálása
 	if is_instance_valid(hp_text_label):
 		hp_text_label.text = str(GlobalData.current_hp) + " / " + str(GlobalData.max_hp)
+		
+	if GlobalData.current_hp < GlobalData.max_hp:
+		current_hp_label.modulate = Color.RED
+	else:
+		current_hp_label.modulate = Color.WHITE
+		
 	if is_instance_valid(mana_text_label):
 		mana_text_label.text = str(GlobalData.current_mana) + " / " + str(GlobalData.max_mana)
+
+	if GlobalData.current_mana < GlobalData.max_mana:
+		current_mana_label.modulate = Color.RED
+	else:
+		current_mana_label.modulate = Color.WHITE
 
 	if not is_instance_valid(panel_node) or not panel_node.visible:
 		return
@@ -192,7 +203,13 @@ func update_stat_ui() -> void:
 		
 	points_label.text = str(GlobalData.available_stat_points)
 	
-	str_label.text = str(GlobalData.stat_strength)
+	str_label.text = str(GlobalData.get_total_strength())
+	
+	if GlobalData.bonus_strength > 0:
+		str_label.modulate = Color.CORNFLOWER_BLUE
+	else:
+		str_label.modulate = Color.WHITE
+		
 	mag_label.text = str(GlobalData.stat_magic)
 	dex_label.text = str(GlobalData.stat_dexterity)
 	vit_label.text = str(GlobalData.stat_vitality)

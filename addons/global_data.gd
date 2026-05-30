@@ -19,10 +19,12 @@ var max_hp: int = 50
 var current_hp: int = 50
 var max_mana: int = 20
 var current_mana: int = 20
+var bonus_strength: int = 0
 
 # --- HARCI STATISZTIKÁK (Pajzs, Ütés, Sebzés) ---
 var base_defense: int = 5       # Alap védelmi pajzs
 var base_hit_chance: int = 50   # Alap ütési találati esély %-ban
+var total_kills := 0           #megölt ellenségek száma
 
 # --- XP TÁBLÁZAT ---
 const XP_TABLE = {
@@ -39,6 +41,9 @@ const XP_TABLE = {
 }
 
 # Számított harci értékek (Diablo 1 mechanika alapján az alap tulajdonságokból)
+func get_total_strength() -> int:
+	return stat_strength + bonus_strength
+	
 func get_total_defense() -> int:
 	# Az Ügyesség (Dexterity) minden 5. pontja növeli a pajzsot / védelmet
 	return base_defense + (stat_dexterity / 5)
@@ -48,12 +53,10 @@ func get_total_hit_chance() -> int:
 	return base_hit_chance + stat_dexterity
 
 func get_min_damage() -> int:
-	# Az Erő (Strength) növeli a minimális sebzést
-	return 1 + (stat_strength / 3)
+	return 1 + (get_total_strength() / 3)
 
 func get_max_damage() -> int:
-	# Az Erő növeli a maximális sebzést
-	return 4 + (stat_strength / 2)
+	return 4 + (get_total_strength() / 2)
 
 func gain_xp(amount: int) -> void:
 	current_xp += amount
@@ -61,6 +64,11 @@ func gain_xp(amount: int) -> void:
 	if XP_TABLE.has(next_level):
 		if current_xp >= XP_TABLE[next_level]:
 			level_up()
+
+func add_kill() -> void:
+	total_kills += 1
+
+	print("[KILLS] Összes ölés:", total_kills)
 
 func level_up() -> void:
 	current_level += 1

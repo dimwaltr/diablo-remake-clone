@@ -35,6 +35,7 @@ var last_direction_suffix := "_del"
 @onready var sfx_death: AudioStreamPlayer2D = $SfxDeath
 
 func _ready() -> void:
+	add_to_group("enemy")
 	current_hp = max_hp
 	spawn_position = global_position
 	
@@ -242,6 +243,7 @@ func take_damage(amount: int) -> void:
 	if current_hp <= 0: die()
 
 func die() -> void:
+	GlobalData.add_kill()
 	is_dead = true
 	set_physics_process(false)
 	var collision = get_node_or_null("CollisionShape2D")

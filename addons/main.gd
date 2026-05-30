@@ -6,7 +6,9 @@ extends Node2D
 @onready var gold_info_label: Label = $CanvasLayer/GoldInfoLabel
 @onready var sfx_weapon_drop: AudioStreamPlayer = $fegyver_kidobas_hang
 var current_selected_ui_item: TextureRect = null # Ebbe mentjük el a kijelölt tárgy képét
-
+@onready var weapon_slot = $CanvasLayer/InventoryGUI/FegyverSlotUI
+@onready var tooltip_label = $HudLayer/ToolTipLabel
+@onready var system_message = $HudLayer/SystemMessage
 
 var player = null
 
@@ -19,6 +21,16 @@ const JSON_PROTOSET_FILE = preload("res://inventory/item_prototypes.json")
 const SAVE_FOLDER_PATH = "C:/Users/Huncut/Documents/diablo-clone/save/"
 const SAVE_FILE_PATH = "C:/Users/Huncut/Documents/diablo-clone/save/inventory_save.json"
 
+func show_system_message(text: String) -> void:
+
+	system_message.text = text
+	system_message.visible = true
+	system_message.modulate = Color.RED
+
+	await get_tree().create_timer(2.0).timeout
+
+	system_message.visible = false
+	
 func _ready() -> void:
 	inventory_ui.visible = false
 	if inventory and inventory.get_prototree():
@@ -68,6 +80,7 @@ func save_inventory_to_file() -> void:
 	var full_save_data = {
 		"inventory_contents": inventory.serialize(),            # Elmentjük a GLoot rácsot
 		"saved_gold_amount": GlobalData.total_inventory_gold,   # Elmentjük a táska aranyát
+		"weapon_slot": weapon_slot.item_slot.serialize(),
 		
 		# 🆕 ÚJ: DIABLO TULAJDONSÁGOK ÉS SZINTEK MENTÉSE
 		"current_level": GlobalData.current_level,
@@ -116,7 +129,23 @@ func load_inventory_from_file() -> void:
 			# Visszatöltjük a GLoot rácsot a helyére
 			if "inventory_contents" in full_save_data:
 				inventory.deserialize(full_save_data["inventory_contents"])
-				
+			if full_save_data.has("weapon_slot"):
+				weapon_slot.item_slot.deserialize(
+					full_save_data["weapon_slot"]
+				)	
+			var item = weapon_slot.item_slot.get_item()
+
+			if player == null:
+				player = get_tree().get_first_node_in_group("player")
+
+			if item != null:
+				var data = item.serialize()
+
+				if data.has("prototype_id"):
+					player.update_equipped_weapon(
+						data["prototype_id"]
+					)
+			
 			# Visszatöltjük a kimentett aranyat
 			if "saved_gold_amount" in full_save_data:
 				GlobalData.total_inventory_gold = int(full_save_data["saved_gold_amount"])
@@ -269,21 +298,76 @@ func setup_gold_hover_info() -> void:
 		ctrl_grid.item_mouse_exited.connect(_on_grid_item_mouse_exited)
 
 func _on_grid_item_mouse_entered(item: InventoryItem) -> void:
-	if item:
-		var item_image_path = item.get_property("image", "")
-		if "arany" in str(item_image_path).to_lower() or "gold" in str(item_image_path).to_lower():
-			if gold_info_label:
-				gold_info_label.text = "A kupac értéke: " + str(GlobalData.total_inventory_gold) + " Arany"
-				gold_info_label.visible = true
-			item.set_property("name", "Arany (" + str(GlobalData.total_inventory_gold) + "g)")
+
+	var item_type = str(item.get_property("type", ""))
+
+	if item_type == "gold":
+
+		var txt := ""
+
+		
+		txt += "Arany: (%d)\n" % GlobalData.total_inventory_gold
+
+		$HudLayer/ToolTipLabel.text = txt
+		$HudLayer/ToolTipLabel.modulate = Color.GOLD
+		$HudLayer/ToolTipLabel.visible = true
+		$HudLayer/ToolTipLabel.add_theme_font_size_override(
+		"font_size",
+		28
+		)
+		#$HudLayer/ToolTipLabel.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		#$HudLayer/ToolTipLabel.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		
+
+		return
+
+
+	# FEGYVEREK
+	if item_type == "weapon":
+
+		var txt := ""
+
+		txt += item.get_property("name") + "\n"
+
+		txt += "Sebzés: %d-%d\n" % [
+			int(item.get_property("min_damage")),
+			int(item.get_property("max_damage"))
+		]
+
+		if item.get_property("bonus_strength") != null:
+			txt += "+%d Erő " % int(item.get_property("bonus_strength"))
+
+		if item.get_property("bonus_hit_chance") != null:
+			txt += "+%d%% Találati esély\n" % int(item.get_property("bonus_hit_chance"))
+
+		if item.get_property("required_strength") != null:
+			txt += "Erő követelmény: %d\n" % int(item.get_property("required_strength"))
+
+		#txt += "Érték: %d arany" % int(item.get_property("value"))
+
+		$HudLayer/ToolTipLabel.text = txt
+		$HudLayer/ToolTipLabel.visible = true
+		$HudLayer/ToolTipLabel.add_theme_font_size_override(
+		"font_size",
+		12
+		)
+
+		match str(item.get_property("rarity")):
+			"magic":
+				$HudLayer/ToolTipLabel.modulate = Color.CORNFLOWER_BLUE
+
+			"rare":
+				$HudLayer/ToolTipLabel.modulate = Color.GOLD
+
+			"legendary":
+				$HudLayer/ToolTipLabel.modulate = Color.ORANGE
+
+			_:
+				$HudLayer/ToolTipLabel.modulate = Color.WHITE
 
 func _on_grid_item_mouse_exited(item: InventoryItem) -> void:
-	if item:
-		var item_image_path = item.get_property("image", "")
-		if "arany" in str(item_image_path).to_lower() or "gold" in str(item_image_path).to_lower():
-			if gold_info_label:
-				gold_info_label.visible = false
-			item.set_property("name", "Arany")
+	$HudLayer/ToolTipLabel.visible = false
+	
 
 
 func _on_fegyver_gomb_pressed() -> void:
@@ -326,10 +410,19 @@ func _on_fegyver_gomb_pressed() -> void:
 			# Ha már volt fegyver a slotban, azt tisztán visszatesszük a táskába
 			var regi_fegyver = weapon_slot_logic.get_item()
 			if regi_fegyver != null:
-				print("[MAIN_DEBUG] A slot foglalt! Régi fegyver kivétele...")
+
+				print("[MAIN_DEBUG] Slot foglalt, csere indul...")
+
+				# Először próbáljuk visszatenni a régit
+				if not inventory.add_item(regi_fegyver):
+
+					print("[MAIN_DEBUG] NINCS HELY A RÉGI FEGYVERNEK!")
+
+					show_system_message("Nincs hely az inventoryban!")
+					return
+
+				# Csak sikeres visszapakolás után töröljük a slotból
 				weapon_slot_logic.clear()
-				if inventory:
-					inventory.add_item(regi_fegyver)
 			
 			print("[MAIN_DEBUG] >>> GLoot ÁTHELYEZÉS INDUL! <<<")
 			
@@ -360,10 +453,17 @@ func _on_fegyver_gomb_pressed() -> void:
 				
 				print("[MAIN_DEBUG] 2. Lépés: >>> SIKER: A fegyver átugrott a slotba, és eltűnt a táskából! <<<")
 				
+
+				
 				if player == null:
 					player = get_tree().get_first_node_in_group("player")
 				if player and player.has_method("update_equipped_weapon"):
-					player.update_equipped_weapon(real_item_id)
+					player.update_equipped_weapon(
+						real_item_id,
+						int(target_item.get_property("min_damage")),
+						int(target_item.get_property("max_damage")),
+						int(target_item.get_property("bonus_strength", 0))
+					)
 				
 				save_inventory_to_file()
 			else:
@@ -374,18 +474,78 @@ func _on_fegyver_gomb_pressed() -> void:
 
 	# 3. LEVÉTEL LOGIKA: Ha üres kézzel kattintasz a gombra, leveszi a bent lévő fegyvert
 	var jelenlegi_fegyver = weapon_slot_logic.get_item()
+
 	if jelenlegi_fegyver != null:
-		print("[MAIN_DEBUG] Nincs kijelölve semmi. Kísérlet a felszerelt fegyver levételére...")
-		weapon_slot_logic.clear()
-		
+
+		print("[MAIN_DEBUG] Kísérlet a fegyver levételére...")
+
+		# Először ellenőrizzük, hogy van-e hely
 		if inventory and inventory.add_item(jelenlegi_fegyver):
-			print("[MAIN_DEBUG] >>> LEVÉTEL SIKER: A fegyver visszakerült a táskába! <<<")
+
+			# Csak akkor töröljük a slotból,
+			# ha sikeresen bekerült a táskába
+			weapon_slot_logic.clear()
+
+			print("[MAIN_DEBUG] >>> LEVÉTEL SIKER <<<")
+
 			if player and player.has_method("update_equipped_weapon"):
 				player.update_equipped_weapon("")
+
 			save_inventory_to_file()
+
 		else:
-			print("[MAIN_DEBUG] >>> LEVÉTEL HIBA: Nem sikerült visszatenni a táskába! <<<")
-	else:
-		print("[MAIN_DEBUG] Nincs semmi kijelölve, és a fegyverhely is üres.")
-		
-	print("[MAIN_DEBUG] =============================================\n")
+
+			print("[MAIN_DEBUG] >>> NINCS HELY A TÁSKÁBAN! <<<")
+			show_system_message("Nincs hely az eszköztárban!")
+
+func show_item_tooltip(item) -> void:
+
+	if tooltip_label == null:
+		return
+
+	var txt := ""
+
+	txt += str(item.get_property("name")) + "\n"
+
+	if item.get_property("type") == "weapon":
+
+		txt += "Sebzés: %d-%d\n" % [
+			int(item.get_property("min_damage")),
+			int(item.get_property("max_damage"))
+		]
+
+	if item.get_property("bonus_strength") != null:
+		txt += "+%d Erő" % int(item.get_property("bonus_strength"))
+
+	if item.get_property("bonus_hit_chance") != null:
+		txt += "+%d%% Találati esély\n" % int(item.get_property("bonus_hit_chance"))
+
+	if item.get_property("required_strength") != null:
+		txt += "Erő követelmény: %d\n" % int(item.get_property("required_strength"))
+
+	#if item.get_property("value") != null:
+		#txt += "\nÉrték: %d arany" % int(item.get_property("value"))
+
+	tooltip_label.text = txt
+	tooltip_label.visible = true
+
+	var rarity = str(item.get_property("rarity"))
+
+	match rarity:
+		"magic":
+			tooltip_label.modulate = Color.CORNFLOWER_BLUE
+
+		"rare":
+			tooltip_label.modulate = Color.GOLD
+
+		"legendary":
+			tooltip_label.modulate = Color.ORANGE
+
+		_:
+			tooltip_label.modulate = Color.WHITE
+
+
+func hide_item_tooltip() -> void:
+
+	if tooltip_label:
+		tooltip_label.visible = false
